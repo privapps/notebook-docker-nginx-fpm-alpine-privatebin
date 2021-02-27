@@ -15,7 +15,8 @@ COPY config.json /var/www/assets/
 
 RUN \
   find /var/www -type f | xargs chmod -x \
-  && rm -fR *
+  && rm -f notebook-privapps.tar.xz \
+  && rmdir notebook-privapps/
 
 
 USER 65534:82
