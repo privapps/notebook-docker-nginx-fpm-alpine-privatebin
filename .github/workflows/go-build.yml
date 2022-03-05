@@ -1,0 +1,44 @@
+name: Go Build 
+
+on:
+  push:
+    branches: [ relays ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '^1.17.5' # The Go version to download (if necessary) and use.
+    - name: build server
+      shell: bash
+      run: |
+        cd go
+        APP_PREFIX=privapp-notebook-server
+        bash go-build.bash $APP_PREFIX
+        for i in `ls $APP_PREFIX-*` ; do gzip -9 $i ; done
+    - name: client
+      shell: bash
+      run: |
+        git clone --depth 1 -b doc https://github.com/privapps/notebook
+        cd notebook ; mv docs static ; cp ../php/config.json static/assets/config.json
+        sed -i 's|/notebook/index.html|/index.html|g' static/index.html
+        tar cjf privapps-web.tar.gz static
+        mv privapps-web.tar.gz ../go
+    - uses: actions/checkout@v2
+      with:
+        ref: latest-binaries
+        path: latest-binaries
+    - name: update latest binaries
+      shell: bash
+      run: |
+        cd latest-binaries
+        rm -f * .* || echo
+        cp ../go/*gz .
+        git add -A .
+        git config --local user.email "privapps"
+        git config --local user.name "privapps"
+        git commit -m "sync with code $(date +'%F')" && \
+        git push "https://${GITHUB_ACTOR}:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:latest-binaries || echo
