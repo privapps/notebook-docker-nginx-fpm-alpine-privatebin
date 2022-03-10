@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM busybox:stable-glibc 
+FROM --platform=$BUILDPLATFORM alpine:3.15
 
 ARG TARGETOS TARGETARCH
 
