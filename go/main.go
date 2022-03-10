@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,7 +21,7 @@ var dataPath string
 
 func getRemoteUrl() string {
 	if urls == nil {
-		urls = strings.Split(getEnv("URLS", "https://bin.0xfc.de|https://bin.bus-hit.me|https://p.darklab.sh"), "|")
+		urls = strings.Split(getEnv("URLS", "https://paste.rosset.net|https://bin.0xfc.de|https://privatepastebin.com|https://p.darklab.sh"), "|")
 		log.Println(urls)
 	}
 	return urls[rand.Intn(len(urls))]
@@ -28,8 +29,12 @@ func getRemoteUrl() string {
 
 func getDataPath() string {
 	if len(dataPath) <= 0 {
-		dataPath = getEnv("NOTE_DATA_PATH", "/var/www/notes/")
+		dataPath = getEnv("NOTE_DATA_PATH", "./notes")
+		if !strings.HasSuffix(dataPath, "/") {
+			dataPath += "/"
+		}
 	}
+
 	return dataPath
 }
 
@@ -45,9 +50,10 @@ func relay(w http.ResponseWriter, req *http.Request) {
 		if code == http.StatusOK {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(rb))
+			log.Print("Paste remote: ", code, url)
 			return
 		} else {
-			log.Println(url, code, rb)
+			log.Println("Paste remote failed: ", code, url)
 		}
 	}
 	w.WriteHeader(http.StatusInternalServerError)
@@ -62,13 +68,16 @@ func back(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		fileName := getDataPath() + "data/" + pasteid[0]
-		if fileExists(fileName) {
+		epoch := fileEpoch(fileName)
+		if epoch > 0 {
 			fileBytes, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				panic(err)
 			}
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Timestamp", strconv.FormatInt(epoch, 10))
 			w.Write(fileBytes)
+			log.Print("Paste served: ", pasteid)
 			return
 		} else {
 			http.Error(w, "Not Found", http.StatusNotFound)
@@ -76,13 +85,14 @@ func back(w http.ResponseWriter, req *http.Request) {
 		}
 	} else if req.Method == http.MethodPut {
 		xhash := req.Header.Get("X-Hash")
+		var xTimestamp = req.Header.Get("X-Timestamp")
 		pasteid, ok := req.URL.Query()["pasteid"]
 		if !ok || len(pasteid[0]) < 4 || len(xhash) < 60 {
 			http.Error(w, "Bad request - Go away!", http.StatusBadRequest)
 			return
 		}
 		fileName := getDataPath() + pasteid[0]
-		if !fileExists(fileName) {
+		if fileEpoch(fileName) == 0 {
 			http.Error(w, "Bad request - Go away!", http.StatusBadRequest)
 			return
 		}
@@ -94,12 +104,25 @@ func back(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		bHash := sha256.Sum256([]byte(string(rbody) + string(key)))
-		if xhash != fmt.Sprintf("%x", bHash[:]) {
-			log.Println(xhash, string(bHash[:]))
+		lHash := fmt.Sprintf("%x", bHash[:])
+		if xhash != lHash {
+			log.Println("Paste hashes: ", xhash, lHash)
 			http.Error(w, "Server token missmatch", http.StatusForbidden)
 			return
 		}
-		os.WriteFile(getDataPath()+"data/"+pasteid[0], rbody, 0600)
+		dataFileName := getDataPath() + "data/" + pasteid[0]
+		if len(xTimestamp) == 0 {
+			xTimestamp = "0"
+		}
+		epoch := strconv.FormatInt(fileEpoch(dataFileName), 10)
+		if epoch != xTimestamp && epoch != "0" {
+			http.Error(w, "Conflict", http.StatusConflict)
+			return
+		}
+
+		os.WriteFile(dataFileName, rbody, 0600)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Timestamp", strconv.FormatInt(fileEpoch(dataFileName), 10))
 		w.WriteHeader(http.StatusCreated)
 		resp := struct {
 			Status int64  `json:"status"`
@@ -110,7 +133,7 @@ func back(w http.ResponseWriter, req *http.Request) {
 			Id:     pasteid[0],
 			Url:    pasteid[0],
 		}
-		log.Print("Paste updated: ", pasteid)
+		log.Println("Paste updated: ", pasteid)
 		json.NewEncoder(w).Encode(resp)
 	} else if req.Method == http.MethodPost { // register
 		pasteid, pwd := createPwd()
@@ -122,7 +145,7 @@ func back(w http.ResponseWriter, req *http.Request) {
 			Key: pwd,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		log.Print("Create new: paste: ", pasteid)
+		log.Print("Paste registed: ", pasteid)
 		json.NewEncoder(w).Encode(resp)
 		return
 	} else {
@@ -142,7 +165,9 @@ func getHost(url string) string {
 
 func doRelay(url string, body []byte) (string, int) {
 	host := getHost(url)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: time.Second * 5,
+	}
 	rreq, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return "", 0
@@ -177,9 +202,12 @@ func doRelay(url string, body []byte) (string, int) {
 	return "", -3
 }
 
-func fileExists(fileName string) bool {
-	_, err := os.Stat(fileName)
-	return err == nil
+func fileEpoch(fileName string) int64 {
+	f, err := os.Stat(fileName)
+	if err != nil {
+		return 0
+	}
+	return f.ModTime().Unix()
 }
 
 func randomString(length int) string {
@@ -195,7 +223,7 @@ func createPwd() (string, string) {
 	for next {
 		pasteid = randomString(6)
 		pwd = randomString(6)
-		next = fileExists(getDataPath() + pasteid)
+		next = fileEpoch(getDataPath()+pasteid) > 0
 	}
 	data := []byte(pwd)
 	os.WriteFile(getDataPath()+pasteid, data, 0444)
@@ -211,6 +239,13 @@ func getEnv(key, fallback string) string {
 func main() {
 	folder := "./static"
 	port := ":" + getEnv("PORT", "8000")
+	if fileEpoch(getDataPath()+"data") == 0 {
+		panic("ENV NOTE_DATA_PATH not configued right. Missing folder $NOTE_DATA_PATH/data !")
+	}
+	if fileEpoch(folder) == 0 {
+		panic("Web folder ./static not found !")
+	}
+
 	fs := http.FileServer(http.Dir(folder))
 	http.HandleFunc("/relay.php", relay)
 	http.HandleFunc("/back.php", back)

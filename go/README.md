@@ -21,5 +21,5 @@ Then run at the root folder
 
 ##### Run inside docker
 ```
-docker run --rm -w /var/www --entrypoint /var/www/<executable> -v ${PWD}:/var/www  -p 18080:8000 -e NOTE_DATA_PATH=./notes/ alpine:3.13
+docker run --memory=6m --rm -w /var/www --entrypoint /var/www/privapp-notebook-server-linux-arm64 -v ${PWD}:/var/www  -p 18080:8000 busybox:stable-glibc
 ```

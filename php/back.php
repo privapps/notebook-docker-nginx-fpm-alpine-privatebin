@@ -1,26 +1,27 @@
 <?php
 
-define('EMAIL_SUPPORTED', false);
-define('REMOTE_SUPPORT', true);
-define('DATA_ROOT', './lib/');
+define('EMAIL_SUPPORTED', 0);
+define('REMOTE_SUPPORT', 0);
+define('DATA_ROOT', '/srv/data/');
 
 define('EMAIL_TEMPLATE', <<<EMAIL
 Please use following URL to update your private notes
-%prefix%#/settings/id,%id%&server,%key%&type,ed&new
-You will obtains a symmetric key and choose your own end to end encryption key when you publish your first note. Please keep that full URL in private as no one but you knows it.
+%prefix%id=%id%&server=%key%&type=ed&new
+You will obtain a symmetric key and choose your own end to end encryption key when you publish your first note. Please keep that full URL in private as no one but you knows it.
 Please do not reply this email as it is not monitored.
 EMAIL
 );
 if( REMOTE_SUPPORT ) {
 	header('Access-Control-Allow-Origin: *');
 	header("Access-Control-Allow-Methods: GET,POST,PUT,OPTIONS");
-	header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With, X-HASH');
+	header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With, X-Hash, X-Timestamp');
 }
 class Back{
-	private $conf_file_loc= DATA_ROOT;
-	private $data_file_loc= DATA_ROOT . 'data/';
+	private $conf_file_loc = DATA_ROOT;
+	private $data_file_loc;
 	private $_db;
 	function __construct() {
+		$this->data_file_loc = $this->conf_file_loc . 'data/';
 	}
 	
 	function register($json){
@@ -33,6 +34,7 @@ class Back{
 		$file = fopen($this->conf_file_loc.$id, "w") or die("Unable to open file!");
 		fwrite($file, $key);
 		fclose($file);
+
 		$object = (object) ['id' => $id, 'key' => $key];
 		if(EMAIL_SUPPORTED){
 			$data = array(
@@ -43,7 +45,7 @@ class Back{
 			$strings = str_replace(array_keys($data), array_values($data), EMAIL_TEMPLATE);
 			mail(
 				$json['email'],
-				'Your Notebook account is ready',
+				'Your private notebook is ready',
 				$strings,
 				'From: Privapps Notebook'
 			);
@@ -51,24 +53,34 @@ class Back{
 		return $object;
 	}
 	
-	function create_or_update($id, $data, $hash){
+	function create_or_update($id, $data, $hash, $timestamp){
 		if(!file_exists($this->conf_file_loc.$id)){
-			return false;
+			return 404;
 		}
 		$key = file_get_contents($this->conf_file_loc.$id);
 		if($hash !== hash('sha256', $data.$key)){
-			return false;
+			return 401;
 		}
-		$file = fopen($this->data_file_loc.$id, "w") or die("Unable to open file!");
+		if(file_exists($this->data_file_loc.$id)){
+			$ts = filemtime($this->data_file_loc.$id);
+			if($ts != intval($timestamp)){
+				return 409;
+			}
+		}
+		$file = fopen($this->data_file_loc.$id, "w") or die('fail to open file');
 		fwrite($file, $data);
 		fclose($file);
-		return true;
+		clearstatcache();
+		$ts = filemtime($this->data_file_loc.$id);
+		return array(201,$ts);
 	}
 	function get($id){
 		if(!file_exists($this->data_file_loc.$id)){
 			return false;
 		}
-		return file_get_contents($this->data_file_loc.$id);
+		$data = file_get_contents($this->data_file_loc.$id);
+		$ts = filemtime($this->data_file_loc.$id);
+		return array($data, $ts);
 	}
 }
 
@@ -105,20 +117,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$data = file_get_contents("php://input");
 	$headers = getallheaders();
 	$hash = $headers['X-Hash'];
+	//var_dump($headers);
+	$timestamp = isset($headers['X-Timestamp']) ? $headers['X-Timestamp'] : '0';
 	$id = $_GET['pasteid'];
 	if(!isset($_SERVER['QUERY_STRING']) || !isset($id) || !isset($hash) || !isset($data)){
 		http_response_code(400);
 		die();
 	}
-	if($x->create_or_update($_GET['pasteid'], $data, $hash)){
-		http_response_code(201);
+	$code = $x->create_or_update($_GET['pasteid'], $data, $hash, $timestamp);
+	if(is_array($code)){
 		echo json_encode([
 			'status' => 0,
 			'id' => $id,
 			'url' => $id
 		]);
+		header('Content-Type: application/json');
+		header('X-Timestamp: '.$code[1]);
+		http_response_code(201);
 	} else {
-		http_response_code(400);
+		http_response_code($code);
 	}
 } elseif($_SERVER['REQUEST_METHOD'] === 'OPTIONS'){
 	// do sth
@@ -130,8 +147,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$data = $x->get($_GET['pasteid']);
 	if($data){
 		header('Content-Type: application/json');
+		header('X-Timestamp: '.$data[1]);
 		http_response_code(200);
-		echo $data;
+		echo $data[0];
 	} else {
 		http_response_code(404);
 	}

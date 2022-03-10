@@ -16,7 +16,7 @@ jobs:
       shell: bash
       run: |
         cd go
-        APP_PREFIX=privapp-notebook-server
+        APP_PREFIX=privapps-notebook-server
         bash go-build.bash $APP_PREFIX
         for i in `ls $APP_PREFIX-*` ; do gzip -9 $i ; done
     - name: client
@@ -25,6 +25,7 @@ jobs:
         git clone --depth 1 -b doc https://github.com/privapps/notebook
         cd notebook ; mv docs static ; cp ../php/config.json static/assets/config.json
         sed -i 's|/notebook/index.html|/index.html|g' static/index.html
+        cp -r static ../go-docker/
         tar cjf privapps-web.tar.gz static
         mv privapps-web.tar.gz ../go
     - uses: actions/checkout@v2
@@ -42,3 +43,16 @@ jobs:
         git config --local user.name "privapps"
         git commit -m "sync with code $(date +'%F')" && \
         git push "https://${GITHUB_ACTOR}:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:latest-binaries || echo
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: build
+      shell: bash 
+      run: |
+        cd go-docker
+        find .
+        docker buildx create --use
+        docker buildx build --platform=linux/amd64,linux/arm64 .  -t ghcr.io/${{ github.repository_owner }}/notebook:dev --push
