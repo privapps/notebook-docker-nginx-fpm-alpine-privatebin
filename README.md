@@ -2,12 +2,12 @@
 
 ### Docker Images
 ```
-docker run --memory=6m --rm -p 18080:8000 ghcr.io/privapps/notebook:dev
+docker run --memory=6m --rm -p 18080:8000 ghcr.io/privapps/notebook:v0.0.1
 ```
 
 To see detail information about go executable command, see branch [go](./go/)
 
-Binaries can be found at tags area. And you might use different configuration. See [php/config.json](php/config.json)
+Binaries can be found at tags area. And you might use different configuration. See [php/config.json](php/config.json) and [config.json](config.json)
 
 
 ## Docker Images for Privapp Notebook
