@@ -6,6 +6,7 @@ COPY /*.gz /
 COPY /static /static
 COPY /run.sh .
 
+
 RUN  \
    if [ "$TARGETARCH" = "amd64" ] ; then TGT='amd64'; else TGT='arm64'; fi \
    && gzip -d privapps-notebook-server-linux-$TGT.gz \
@@ -13,6 +14,7 @@ RUN  \
    && chmod u+x notebook-server \
    && mkdir -p notes/data static && rm *.gz
 
+COPY /config.json /static/assets/
 
 EXPOSE 8080
 

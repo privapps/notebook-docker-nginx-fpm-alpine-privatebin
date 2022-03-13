@@ -1,3 +1,15 @@
+## Custom Backend Support Edit Exiting Note
+
+### Docker Images
+```
+docker run --memory=6m --rm -p 18080:8000 ghcr.io/privapps/notebook:dev
+```
+
+To see detail information about go executable command, see branch [go](./go/)
+
+Binaries can be found at tags area. And you might use different configuration. See [php/config.json](php/config.json)
+
+
 ## Docker Images for Privapp Notebook
 
 It contains privapps notebook, privatebin, nginx, php-fpm & alpine 
