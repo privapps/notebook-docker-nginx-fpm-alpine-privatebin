@@ -39,24 +39,35 @@ func getDataPath() string {
 }
 
 func relay(w http.ResponseWriter, req *http.Request) {
-	body, err := ioutil.ReadAll(req.Body)
-	if err != nil {
+	if req.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
+		return
+	} else if req.Method == http.MethodPost {
+		body, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, "Bad request - Go away!", http.StatusBadRequest)
+			return
+		}
+		for i := 0; i < 10; i++ {
+			url := getRemoteUrl()
+			rb, code := doRelay(url, body)
+			if code == http.StatusOK {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Write([]byte(rb))
+				log.Print("Paste remote: ", code, url)
+				return
+			} else {
+				log.Println("Paste remote failed: ", code, url)
+			}
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
 		http.Error(w, "Bad request - Go away!", http.StatusBadRequest)
 		return
 	}
-	for i := 0; i < 10; i++ {
-		url := getRemoteUrl()
-		rb, code := doRelay(url, body)
-		if code == http.StatusOK {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(rb))
-			log.Print("Paste remote: ", code, url)
-			return
-		} else {
-			log.Println("Paste remote failed: ", code, url)
-		}
-	}
-	w.WriteHeader(http.StatusInternalServerError)
 }
 
 func back(w http.ResponseWriter, req *http.Request) {

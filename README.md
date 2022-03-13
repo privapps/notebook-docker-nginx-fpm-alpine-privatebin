@@ -2,7 +2,7 @@
 
 ### Docker Images
 ```
-docker run --memory=6m --rm -p 18080:8000 ghcr.io/privapps/notebook:v0.0.1
+docker run --memory=6m --rm -p 18080:8000 ghcr.io/privapps/notebook:v0.0.2
 ```
 
 To see detail information about go executable command, see branch [go](./go/)
