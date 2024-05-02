@@ -19,6 +19,8 @@ import (
 var urls []string
 var dataPath string
 
+const REMOTE_TIMEOUT_SECONDS = 10
+
 func getRemoteUrl() string {
 	if urls == nil {
 		urls = strings.Split(getEnv("URLS", "https://paste.rosset.net|https://bin.0xfc.de|https://privatepastebin.com|https://p.darklab.sh"), "|")
@@ -57,10 +59,10 @@ func relay(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 				w.Write([]byte(rb))
-				log.Print("Paste remote: ", code, url)
+				log.Print("Paste remote OK:\t", url)
 				return
 			} else {
-				log.Println("Paste remote failed: ", code, url)
+				log.Println("Paste remote failed: ", code, url, "\t", rb)
 			}
 		}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -177,7 +179,7 @@ func getHost(url string) string {
 func doRelay(url string, body []byte) (string, int) {
 	host := getHost(url)
 	client := &http.Client{
-		Timeout: time.Second * 5,
+		Timeout: time.Second * REMOTE_TIMEOUT_SECONDS,
 	}
 	rreq, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
@@ -188,7 +190,7 @@ func doRelay(url string, body []byte) (string, int) {
 	rreq.Header.Set("origin", host)
 	resp, err := client.Do(rreq)
 	if err != nil {
-		return "Bad response - Data?", http.StatusServiceUnavailable
+		return err.Error(), http.StatusServiceUnavailable
 	}
 	defer resp.Body.Close()
 
@@ -249,7 +251,7 @@ func getEnv(key, fallback string) string {
 
 func main() {
 	folder := "./static"
-	port := ":" + getEnv("PORT", "8000")
+	port := ":" + getEnv("PORT", "8080")
 	if fileEpoch(getDataPath()+"data") == 0 {
 		panic("ENV NOTE_DATA_PATH not configued right. Missing folder $NOTE_DATA_PATH/data !")
 	}

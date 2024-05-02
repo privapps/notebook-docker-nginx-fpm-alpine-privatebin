@@ -1,3 +1,3 @@
 module web/main
 
-go 1.17
+go 1.22

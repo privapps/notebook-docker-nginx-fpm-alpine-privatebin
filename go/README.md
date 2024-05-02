@@ -1,6 +1,6 @@
 ### Run ready to use docker
 ```
-docker run -d -p 8080:8080 --rm ghcr.io/privapps/notebook:v0.0.1
+docker run -d -p 8080:8080 --rm ghcr.io/privapps/notebook:v0.0.3
 ```
 
 ### Pre-build Executables
@@ -28,9 +28,9 @@ The `URLS` is used for report privatebin publish.
 
 ##### Run inside docker
 ```
-docker run --memory=6m --rm -w -v ${PWD}:/opt  -p 18080:8000 busybox:stable-glibc /opt/<executable>
+docker run --memory=6m --rm -w -v ${PWD}:/opt  -p 18080:8080 busybox:stable-glibc /opt/<executable>
 ```
 
 **Note for running inside docker**
 
-busybox:stable-glibc may have problem for publishing https requests in x86_64. If you need that, try alpine
+busybox:stable-glibc may have problem for publishing https requests to remote Urls. If you need that, try alpine
