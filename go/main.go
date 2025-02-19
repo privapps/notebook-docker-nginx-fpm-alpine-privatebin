@@ -250,13 +250,13 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
-	folder := "./static"
+	folder := getEnv("NOTE_WEB_PATH", "./static")
 	port := ":" + getEnv("PORT", "8080")
 	if fileEpoch(getDataPath()+"data") == 0 {
-		panic("ENV NOTE_DATA_PATH not configued right. Missing folder $NOTE_DATA_PATH/data !")
+		panic("ENV NOTE_DATA_PATH not configured right. Missing folder $NOTE_DATA_PATH/data !")
 	}
-	if fileEpoch(folder) == 0 {
-		panic("Web folder ./static not found !")
+	if fileEpoch(folder) == 0 || fileEpoch(folder+"/index.html") == 0 {
+		panic("Web folder NOTE_WEB_PATH not found !")
 	}
 
 	fs := http.FileServer(http.Dir(folder))

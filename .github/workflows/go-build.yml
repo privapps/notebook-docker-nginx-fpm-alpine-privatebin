@@ -49,3 +49,4 @@ jobs:
           go/privapps-notebook-server-linux-amd64.gz
           go/pvprivapps-notebook-server-linux-arm64.gz
           go/privapps-notebook-server-windows-amd64.exe.gz
+          go/privapps-notebook-server-windows-arm64.exe.gz
